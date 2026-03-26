@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InBody Webhook Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --bg2:       #161b27;
+      --bg3:       #1e2536;
+      --border:    #2a3347;
+      --border2:   #374159;
+      --primary:   #3b82f6;
+      --primary-d: #2563eb;
+      --green:     #22c55e;
+      --yellow:    #f59e0b;
+      --red:       #ef4444;
+      --text:      #f1f5f9;
+      --muted:     #8b9ab5;
+      --dim:       #4a5568;
+      --radius:    10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .logo svg { color: var(--primary); }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+
+    /* ── Status bar ── */
+    #status-bar {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 12px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+    .status-item { display: flex; align-items: center; gap: 6px; }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--dim); flex-shrink: 0;
+    }
+    .dot.green  { background: var(--green); }
+    .dot.yellow { background: var(--yellow); }
+    .dot.red    { background: var(--red); }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .container { grid-template-columns: 1fr; }
+    }
+
+    /* ── Panel ── */
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: rgba(59,130,246,0.15);
+      color: var(--primary);
+      border: 1px solid rgba(59,130,246,0.25);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border2);
+      background: var(--bg3);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: var(--border); }
+    .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn.primary:hover { background: var(--primary-d); }
+    .btn.danger { border-color: rgba(239,68,68,0.4); color: var(--red); }
+    .btn.danger:hover { background: rgba(239,68,68,0.1); }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Event list ── */
+    #event-list { list-style: none; }
+    .event-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .event-item:last-child { border-bottom: none; }
+    .event-item:hover { background: var(--bg3); }
+    .event-item.active { background: rgba(59,130,246,0.08); border-left: 2px solid var(--primary); }
+
+    .event-icon {
+      width: 34px; height: 34px;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 16px;
+    }
+    .event-icon.test { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.3); }
+
+    .event-meta { flex: 1; min-width: 0; }
+    .event-user {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .event-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .fetch-badge {
+      font-size: 10px; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .fetch-badge.success  { background: rgba(34,197,94,0.15);  color: var(--green);  border: 1px solid rgba(34,197,94,0.3); }
+    .fetch-badge.pending  { background: rgba(59,130,246,0.15); color: var(--primary); border: 1px solid rgba(59,130,246,0.3); }
+    .fetch-badge.error    { background: rgba(239,68,68,0.15);  color: var(--red);    border: 1px solid rgba(239,68,68,0.3); }
+    .fetch-badge.skipped  { background: rgba(139,154,181,0.12); color: var(--muted); border: 1px solid rgba(139,154,181,0.2); }
+
+    .empty-state {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+    /* ── Detail panel ── */
+    #detail-panel { position: sticky; top: 80px; align-self: start; }
+
+    .detail-placeholder {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--dim);
+      font-size: 13px;
+    }
+
+    .detail-body { padding: 0; }
+
+    .detail-section {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-section:last-child { border-bottom: none; }
+
+    .section-label {
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .kv-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 14px;
+      font-size: 12px;
+    }
+    .kv-key   { color: var(--muted); white-space: nowrap; }
+    .kv-value { color: var(--text);  word-break: break-all; }
+    .kv-value.mono { font-family: 'SF Mono', Consolas, monospace; }
+
+    .inbody-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .inbody-field {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .inbody-field-key   { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+    .inbody-field-value { font-size: 14px; font-weight: 700; color: var(--text); }
+
+    .raw-json {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: 'SF Mono', Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--muted);
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* ── Pulse animation for pending ── */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+    .pulsing { animation: pulse 1.5s ease-in-out infinite; }
+
+    /* ── Scroll ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    .config-warning {
+      margin: 16px;
+      padding: 12px 14px;
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.3);
+      border-radius: 8px;
+      font-size: 12px;
+      color: #fcd34d;
+      line-height: 1.6;
+    }
+    .config-warning strong { font-weight: 700; }
+    .config-warning code {
+      background: rgba(245,158,11,0.15);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+      <path d="M2 17l10 5 10-5"/>
+      <path d="M2 12l10 5 10-5"/>
+    </svg>
+    InBody Webhook Dashboard
+  </a>
+  <div class="header-right">
+    <button class="btn" id="btn-test" title="Inject a test webhook event">
+      ⚡ Simulate Event
+    </button>
+    <button class="btn danger" id="btn-clear">
+      🗑 Clear
+    </button>
+  </div>
+</header>
+
+<div id="status-bar">
+  <div class="status-item">
+    <span class="dot green"></span>
+    Server online
+  </div>
+  <div class="status-item" id="status-api">
+    <span class="dot" id="api-dot"></span>
+    <span id="api-label">Checking API config…</span>
+  </div>
+  <div class="status-item" id="status-webhook">
+    <span>Webhook URL:</span>
+    <code id="webhook-url" style="font-family:monospace;color:var(--text)">—</code>
+  </div>
+  <div class="status-item" style="margin-left:auto">
+    <span id="auto-refresh-label" style="color:var(--dim)">Auto-refresh: on</span>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Event List -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        📡 Incoming Events
+        <span class="badge" id="event-count">0</span>
+      </div>
+      <span style="font-size:11px;color:var(--dim)" id="last-updated">—</span>
+    </div>
+    <ul id="event-list">
+      <li class="empty-state">
+        <div class="icon">📭</div>
+        No events yet.<br>
+        Trigger a measurement or click <strong>Simulate Event</strong> to test.
+      </li>
+    </ul>
+  </div>
+
+  <!-- Detail Panel -->
+  <div class="panel" id="detail-panel">
+    <div class="panel-header">
+      <div class="panel-title">📋 Event Detail</div>
+    </div>
+    <div class="detail-placeholder" id="detail-placeholder">
+      Select an event to view details
+    </div>
+    <div class="detail-body" id="detail-body" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+  let allEvents = []
+  let selectedId = null
+  let refreshTimer = null
+  const REFRESH_MS = 4000
+
+  // ── Fetch status ─────────────────────────────────────────────────────────────
+  async function fetchStatus() {
+    try {
+      const r = await fetch('/api/status')
+      const s = await r.json()
+      const dot   = document.getElementById('api-dot')
+      const label = document.getElementById('api-label')
+      const wurl  = document.getElementById('webhook-url')
+      if (s.apiConfigured) {
+        dot.className   = 'dot green'
+        label.textContent = `API: ${s.account}`
+      } else {
+        dot.className   = 'dot yellow'
+        label.textContent = 'API not configured (set .env)'
+        showConfigWarning()
+      }
+      wurl.textContent = s.webhookUrl
+    } catch (e) { /* server offline */ }
+  }
+
+  function showConfigWarning() {
+    const list = document.getElementById('event-list')
+    if (list.querySelector('.config-warning')) return
+    const warn = document.createElement('li')
+    warn.innerHTML = `
+      <div class="config-warning">
+        <strong>API not configured.</strong><br>
+        Copy <code>.env.example</code> to <code>.env</code> and fill in
+        <code>INBODY_ACCOUNT</code> and <code>INBODY_API_KEY</code>.<br>
+        You can still receive webhooks — measurement data fetch will be skipped.
+      </div>`
+    list.prepend(warn)
+  }
+
+  // ── Fetch events ──────────────────────────────────────────────────────────────
+  async function fetchEvents() {
+    try {
+      const r = await fetch('/api/events')
+      allEvents = await r.json()
+      renderList()
+      if (selectedId) {
+        const ev = allEvents.find(e => e.id === selectedId)
+        if (ev) renderDetail(ev)
+      }
+      document.getElementById('last-updated').textContent =
+        'Updated ' + new Date().toLocaleTimeString()
+    } catch (e) { /* ignore */ }
+  }
+
+  // ── Render list ───────────────────────────────────────────────────────────────
+  function renderList() {
+    const ul = document.getElementById('event-list')
+    document.getElementById('event-count').textContent = allEvents.length
+
+    if (!allEvents.length) {
+      ul.innerHTML = `<li class="empty-state"><div class="icon">📭</div>No events yet.<br>Trigger a measurement or click <strong>Simulate Event</strong> to test.</li>`
+      return
+    }
+
+    ul.innerHTML = allEvents.map(ev => {
+      const p = ev.payload
+      const timeStr = formatTime(ev.receivedAt)
+      const icon = ev.isTest ? '🧪' : typeIcon(p.Type)
+      const iconClass = ev.isTest ? 'test' : ''
+      const badge = fetchBadge(ev.fetchStatus)
+      const active = ev.id === selectedId ? ' active' : ''
+      return `
+        <li class="event-item${active}" data-id="${ev.id}">
+          <div class="event-icon ${iconClass}">${icon}</div>
+          <div class="event-meta">
+            <div class="event-user">${escHtml(p.UserID || '—')}${ev.isTest ? ' <span style="color:var(--yellow);font-size:10px">(test)</span>' : ''}</div>
+            <div class="event-time">${escHtml(p.Equip || p.Type || '')} · ${timeStr}</div>
+          </div>
+          ${badge}
+        </li>`
+    }).join('')
+
+    ul.querySelectorAll('.event-item').forEach(li => {
+      li.addEventListener('click', () => {
+        selectedId = li.dataset.id
+        ul.querySelectorAll('.event-item').forEach(x => x.classList.remove('active'))
+        li.classList.add('active')
+        const ev = allEvents.find(e => e.id === selectedId)
+        if (ev) renderDetail(ev)
+      })
+    })
+  }
+
+  // ── Render detail ─────────────────────────────────────────────────────────────
+  function renderDetail(ev) {
+    document.getElementById('detail-placeholder').style.display = 'none'
+    const body = document.getElementById('detail-body')
+    body.style.display = 'block'
+    const p = ev.payload
+
+    let inbodySection = ''
+    if (ev.fetchStatus === 'success' && ev.inbodyData) {
+      inbodySection = renderInBodyData(ev.inbodyData)
+    } else if (ev.fetchStatus === 'pending') {
+      inbodySection = `
+        <div class="detail-section">
+          <div class="section-label">Measurement Data</div>
+          <div style="font-size:12px;color:var(--primary)" class="pulsing">⏳ Fetching from InBody API…</div>
+        </div>`
+    } else if (ev.fetchStatus === 'error') {
+      inbodySection = `
+        <div class="detail-section">
+          <div class="section-label">Measurement Data</div>
+          <div style="font-size:12px;color:var(--red)">❌ Fetch failed: ${escHtml(ev.fetchError || 'Unknown error')}</div>
+        </div>`
+    } else if (ev.fetchStatus === 'skipped_no_config') {
+      inbodySection = `
+        <div class="detail-section">
+          <div class="section-label">Measurement Data</div>
+          <div style="font-size:12px;color:var(--muted)">API key not configured — data fetch skipped.</div>
+        </div>`
+    } else if (ev.fetchStatus === 'skipped_temp') {
+      inbodySection = `
+        <div class="detail-section">
+          <div class="section-label">Measurement Data</div>
+          <div style="font-size:12px;color:var(--yellow)">⚠️ Temp data — must be reviewed by LBWeb admin before it can be fetched.</div>
+        </div>`
+    }
+
+    body.innerHTML = `
+      <div class="detail-section">
+        <div class="section-label">Webhook Payload</div>
+        <div class="kv-grid">
+          <span class="kv-key">UserID</span>     <span class="kv-value mono">${escHtml(p.UserID || '—')}</span>
+          <span class="kv-key">UserToken</span>  <span class="kv-value mono">${escHtml(p.TelHP || '—')}</span>
+          <span class="kv-key">Equipment</span>  <span class="kv-value">${escHtml(p.Equip || '—')}</span>
+          <span class="kv-key">Serial</span>     <span class="kv-value mono">${escHtml(p.EquipSerial || '—')}</span>
+          <span class="kv-key">DateTime</span>   <span class="kv-value mono">${escHtml(p.TestDatetimes || '—')}</span>
+          <span class="kv-key">Account</span>    <span class="kv-value">${escHtml(p.Account || '—')}</span>
+          <span class="kv-key">Temp Data</span>  <span class="kv-value" style="color:${p.IsTempData==='true'?'var(--yellow)':'var(--green)'}">
+            ${p.IsTempData === 'true' ? '⚠️ Yes' : '✓ No'}
+          </span>
+          <span class="kv-key">Received</span>   <span class="kv-value">${new Date(ev.receivedAt).toLocaleString()}</span>
+        </div>
+      </div>
+      ${inbodySection}
+      <div class="detail-section">
+        <div class="section-label">Raw Payload JSON</div>
+        <pre class="raw-json">${escHtml(JSON.stringify(p, null, 2))}</pre>
+      </div>
+    `
+  }
+
+  function renderInBodyData(data) {
+    // GetInBodyDataByID returns an object with dynamic measurement keys.
+    // Show key metrics if present; fall back to raw JSON.
+    const knownKeys = {
+      'WT':  { label: 'Weight',          unit: 'kg'  },
+      'SMM': { label: 'Skeletal Muscle',  unit: 'kg'  },
+      'BFM': { label: 'Body Fat Mass',    unit: 'kg'  },
+      'PBF': { label: 'Body Fat %',       unit: '%'   },
+      'BMI': { label: 'BMI',              unit: ''    },
+      'ICW': { label: 'Intracell Water',  unit: 'L'   },
+      'ECW': { label: 'Extracell Water',  unit: 'L'   },
+      'TBW': { label: 'Total Body Water', unit: 'L'   },
+      'LBM': { label: 'Lean Body Mass',   unit: 'kg'  },
+      'VFA': { label: 'Visceral Fat Area',unit: 'cm²' },
+    }
+
+    const found = Object.entries(knownKeys)
+      .filter(([k]) => data[k] !== undefined && data[k] !== null)
+      .map(([k, meta]) => `
+        <div class="inbody-field">
+          <div class="inbody-field-key">${meta.label}</div>
+          <div class="inbody-field-value">${data[k]}${meta.unit ? '<span style="font-size:11px;font-weight:400;color:var(--muted)"> '+meta.unit+'</span>' : ''}</div>
+        </div>`)
+
+    const fieldsHtml = found.length
+      ? `<div class="inbody-fields">${found.join('')}</div>`
+      : `<div style="font-size:12px;color:var(--muted)">No known metric keys found in response.</div>`
+
+    return `
+      <div class="detail-section">
+        <div class="section-label" style="display:flex;justify-content:space-between">
+          Measurement Data
+          <span style="color:var(--green)">✓ Fetched</span>
+        </div>
+        ${fieldsHtml}
+      </div>
+      <div class="detail-section">
+        <div class="section-label">Raw InBody Data JSON</div>
+        <pre class="raw-json">${escHtml(JSON.stringify(data, null, 2))}</pre>
+      </div>`
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────────
+  document.getElementById('btn-test').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-test')
+    btn.disabled = true
+    try {
+      const r = await fetch('/api/test-webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const d = await r.json()
+      selectedId = d.eventId
+      await fetchEvents()
+    } finally {
+      btn.disabled = false
+    }
+  })
+
+  document.getElementById('btn-clear').addEventListener('click', async () => {
+    if (!confirm('Clear all events?')) return
+    await fetch('/api/events', { method: 'DELETE' })
+    selectedId = null
+    document.getElementById('detail-placeholder').style.display = ''
+    document.getElementById('detail-body').style.display = 'none'
+    await fetchEvents()
+  })
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function fetchBadge(status) {
+    const map = {
+      success:          ['success', '✓ Data fetched'],
+      pending:          ['pending pulsing', '⏳ Fetching…'],
+      error:            ['error',   '✗ Fetch error'],
+      skipped_no_config:['skipped', '— No config'],
+      skipped_temp:     ['skipped', '⚠ Temp data'],
+    }
+    const [cls, label] = map[status] || ['skipped', status]
+    return `<span class="fetch-badge ${cls}">${label}</span>`
+  }
+
+  function typeIcon(type) {
+    return type === 'InBody' ? '⚖️' : type === 'Sleep' ? '😴' : type === 'BasicFitness' ? '💪' : '📊'
+  }
+
+  function formatTime(iso) {
+    const d = new Date(iso)
+    const now = new Date()
+    const diff = now - d
+    if (diff < 60000) return `${Math.floor(diff/1000)}s ago`
+    if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`
+    return d.toLocaleTimeString()
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  fetchStatus()
+  fetchEvents()
+  refreshTimer = setInterval(fetchEvents, REFRESH_MS)
+</script>
+</body>
+</html>
